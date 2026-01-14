@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+
+# Generated artifacts (keep repo light; regenerate as needed)
+*.docx
+*.pdf
+*.hwpx
+*.docx2hwpx/
+*.hwpx2docx/
+.tmp_smoke_test/
+
+# Temp / OS
+.DS_Store
