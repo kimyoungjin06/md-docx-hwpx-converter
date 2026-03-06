@@ -153,43 +153,66 @@ def _table_rows(table_block: Dict[str, Any]) -> List[List[str]]:
 
     rows: List[List[str]] = []
 
+    def cells_from_row(row: Any) -> Optional[List[Any]]:
+        if isinstance(row, dict) and row.get("t") == "Row":
+            row_c = row.get("c", [None, []])
+            cells = row_c[1] if isinstance(row_c, list) and len(row_c) >= 2 else []
+            return cells if isinstance(cells, list) else None
+        # Pandoc 3.x JSON: Row is single-constructor, encoded as [Attr, [Cell]]
+        if isinstance(row, list) and len(row) >= 2 and isinstance(row[1], list):
+            return row[1]
+        return None
+
+    def blocks_from_cell(cell: Any) -> List[Dict[str, Any]]:
+        blocks: Any = []
+        if isinstance(cell, dict) and cell.get("t") == "Cell":
+            cell_c = cell.get("c", [None, None, None, None, []])
+            blocks = cell_c[4] if isinstance(cell_c, list) and len(cell_c) >= 5 else []
+        # Pandoc 3.x JSON: Cell is single-constructor, encoded as [Attr, Align, RowSpan, ColSpan, [Block]]
+        elif isinstance(cell, list) and len(cell) >= 5:
+            blocks = cell[4]
+        return blocks if isinstance(blocks, list) else []
+
     def rows_from_row_objs(row_objs: Any) -> None:
         if not isinstance(row_objs, list):
             return
         for row in row_objs:
-            if not isinstance(row, dict) or row.get("t") != "Row":
+            cells = cells_from_row(row)
+            if not cells:
                 continue
-            row_c = row.get("c", [None, []])
-            cells = row_c[1] if isinstance(row_c, list) and len(row_c) >= 2 else []
             row_texts: List[str] = []
-            if not isinstance(cells, list):
-                continue
             for cell in cells:
-                if not isinstance(cell, dict) or cell.get("t") != "Cell":
-                    row_texts.append("")
-                    continue
-                cell_c = cell.get("c", [None, None, None, None, []])
-                blocks = cell_c[4] if isinstance(cell_c, list) and len(cell_c) >= 5 else []
-                row_texts.append(_blocks_to_text(blocks if isinstance(blocks, list) else []))
+                row_texts.append(_blocks_to_text(blocks_from_cell(cell)))
             rows.append(row_texts)
 
+    # TableHead: dict form (older) or [Attr, [Row]] (Pandoc 3.x)
     if isinstance(table_head, dict) and table_head.get("t") == "TableHead":
         head_rows = table_head.get("c", [None, []])[1]
         rows_from_row_objs(head_rows)
+    elif isinstance(table_head, list) and len(table_head) >= 2:
+        rows_from_row_objs(table_head[1])
 
     if isinstance(table_bodies, list):
         for body in table_bodies:
-            if not isinstance(body, dict) or body.get("t") != "TableBody":
+            if isinstance(body, dict) and body.get("t") == "TableBody":
+                body_c = body.get("c", [None, None, [], []])
+                head_rows = body_c[2] if isinstance(body_c, list) and len(body_c) >= 3 else []
+                body_rows = body_c[3] if isinstance(body_c, list) and len(body_c) >= 4 else []
+                rows_from_row_objs(head_rows)
+                rows_from_row_objs(body_rows)
                 continue
-            body_c = body.get("c", [None, None, [], []])
-            head_rows = body_c[2] if isinstance(body_c, list) and len(body_c) >= 3 else []
-            body_rows = body_c[3] if isinstance(body_c, list) and len(body_c) >= 4 else []
-            rows_from_row_objs(head_rows)
-            rows_from_row_objs(body_rows)
 
+            # Pandoc 3.x JSON: TableBody is single-constructor, encoded as [Attr, RowHeadColumns, [Row], [Row]]
+            if isinstance(body, list) and len(body) >= 4:
+                rows_from_row_objs(body[2])
+                rows_from_row_objs(body[3])
+
+    # TableFoot: dict form (older) or [Attr, [Row]] (Pandoc 3.x)
     if isinstance(table_foot, dict) and table_foot.get("t") == "TableFoot":
         foot_rows = table_foot.get("c", [None, []])[1]
         rows_from_row_objs(foot_rows)
+    elif isinstance(table_foot, list) and len(table_foot) >= 2:
+        rows_from_row_objs(table_foot[1])
 
     return rows
 
@@ -273,7 +296,10 @@ def _flatten_blocks(blocks: Sequence[Dict[str, Any]]) -> Iterator[DocPara]:
             c = block.get("c", [])
             if isinstance(c, list) and len(c) >= 2:
                 cap = c[1]
-                if isinstance(cap, dict) and cap.get("t") == "Caption":
+                # Pandoc 3.x JSON: Caption is single-constructor, encoded as [short, [Block]]
+                if isinstance(cap, list) and len(cap) >= 2 and isinstance(cap[1], list):
+                    caption = _blocks_to_text(cap[1])
+                elif isinstance(cap, dict) and cap.get("t") == "Caption":
                     cap_blocks = cap.get("c", [None, []])[1]
                     if isinstance(cap_blocks, list):
                         caption = _blocks_to_text(cap_blocks)

@@ -112,6 +112,18 @@ LaTeX/PDF 빌드에서 경로/폰트 이슈를 줄이기 위해, `Final_Report_M
 bash print/docx_to_review_pdf.sh "print/kriss_master_merged.docx" "print/kriss_master_merged.pdf"
 ```
 
+## 편집사 전달 폴더 만들기(압축용)
+
+DOCX/HWPX/PDF + 그림 추출본을 **한 폴더에 모아** 편집사에 전달하기 위한 패키지를 생성한다.
+
+```bash
+.venv/bin/python print/make_handoff_package.py \\
+  --docx "input.docx" \\
+  --template-hwpx "template.hwpx"
+```
+
+기본 출력: `dist/handoff_<YYYYMMDD>_<docx_stem>/`
+
 ## 주의사항(요약)
 
 - Quarto → PDF는 환경에 따라 LaTeX(TeX Live/TinyTeX) 설치가 필요할 수 있다.
